@@ -12,7 +12,7 @@
     "./remote": { "types": "./lib/typert.remote-client.d.ts", "default": "./lib/typert.remote-client.js" },
     "./locale/*.json": "./locale/*.json", "./icon": "./icon.svg", "./package.json": "./package.json"
   },
-  "files": ["lib", "lib/typert.host.js", "lib/typert.host.d.ts", "lib/typert.remote-client.js", "lib/typert.remote-client.d.ts", "cordis.patch.yml", "README.md", "THIRD_PARTY_NOTICES.md", "docs/api.md", ".env.example", "icon.svg", "locale/*.json", "scripts/check-connection.mjs"],
+  "files": ["lib", "lib/typert.host.js", "lib/typert.host.d.ts", "lib/typert.remote-client.js", "lib/typert.remote-client.d.ts", "cordis.patch.yml", "README.md", "THIRD_PARTY_NOTICES.md", "docs/api.md", "docs/screenshots/*.png", ".env.example", "icon.svg", "locale/*.json", "scripts/check-connection.mjs"],
   "dsh": { "bundle": { "patch": "./cordis.patch.yml" }, "client": { "platform": "web", "inject": ["@deepseek-ai/dsh-api-gateway", "@deepseek-ai/dsh-client-connection"] } },
   "peerDependencies": {
     "@deepseek-ai/cordis": "4.0.5-alpha.1", "@deepseek-ai/schemastery": "3.18.5-alpha.1",

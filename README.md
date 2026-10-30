@@ -15,6 +15,22 @@
 
 Manage 负责草稿、审批和写入；WebUI 负责展示和用户操作；Gateway 负责只读查询。Manage 不执行已登记的业务算法，也不会在启用时创建、迁移或重建数据库 Schema。
 
+## 运行截图
+
+以下为配套 WebUI 调用 Manage 后端的运行界面。
+
+### 软件工厂概览
+
+能力树、画布和节点详情联动展示，编辑模式支持草稿修改及人工保存。
+
+![软件工厂概览：能力树、节点详情和 AI 草稿助手](docs/screenshots/factory-overview.png)
+
+### 软件工厂入库
+
+第 0 步选择位置与对象，后续按八类字段填写，右侧复用 DSH 原生 AI 对话辅助整理草稿。
+
+![软件工厂入库：位置选择、分步表单和 AI 草稿助手](docs/screenshots/agent-registration.png)
+
 ## 环境与配套插件
 
 当前开发目标为 **DSH 0.2.1-alpha.2、Node.js 24 或以上、HugeGraph 1.7.0**，Cordis peer 版本为 `4.0.5-alpha.1`。其他版本需另外核对兼容性。
