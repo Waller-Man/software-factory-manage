@@ -1,0 +1,20 @@
+# Local dependencies and generated builds
+/node_modules/
+/lib/
+/artifacts/
+/test-results/
+/coverage/
+*.tsbuildinfo
+*.log
+
+# Local connection settings; only the blank template belongs in Git
+.env
+.env.*
+!.env.example
+credentials.json
+connection.private.json
+*.private.*
+
+# OS files
+.DS_Store
+Thumbs.db

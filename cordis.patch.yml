@@ -1,0 +1,15 @@
+- insert:
+    - id: sf-manage
+      name: '@software-factory/manage'
+      config:
+        envFile: '.env'
+    - id: preset-software-factory-manage
+      name: '@deepseek-ai/dsh-agent-preset'
+      config:
+        id: software-factory-manage
+        name: 软件工厂草稿助手
+        description: 读取资料与工厂数据、拟定所属草稿，人工界面保存入库
+        order: 8
+        plugins:
+          - id: sf-manage-safety
+            name: '@software-factory/manage/preset'
