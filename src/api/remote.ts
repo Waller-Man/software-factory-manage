@@ -3,11 +3,11 @@ import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol';
 import { ZodError, type ZodType } from 'zod';
 import type {} from '@deepseek-ai/dsh-client-connection';
 import type {} from '@deepseek-ai/dsh-storage-domain';
+import type {} from '@deepseek-ai/cordis-plugin-loader';
 import type { ManageResult, ManageStatus, ManageDraft, DraftSummary, CreateDraftRequest, ListDraftsRequest, DraftIdRequest, RevisionRequest, UpdateDraftRequest, StageCreateRequest, StageUpdateRequest, StageDeleteRequest, StageMoveVersionRequest, UndoChangeRequest, PreviewResult, CommitRequest, CommitReceipt, ReceiptRequest, HugeGraphReadService } from '../types.ts';
-import { Config, type ManageConfig } from '../config.ts';
+import { Config, connectionConfig, snapshotConfig, type LiveManageConfig, type ManageConfig } from '../config.ts';
 import { failure, ensure } from '../errors.ts';
 import { GatewayReader } from '../gateway.ts';
-import { readConnectionEnv, connectionEnvPath } from '../env.ts';
 import { WriteTransport } from '../database/transport.ts';
 import { CudWriter } from '../database/cud.ts';
 import { DraftService } from '../drafts/service.ts';
@@ -20,6 +20,8 @@ import type { AssistantRequest, AssistantSession } from '../types.ts';
 declare module '@deepseek-ai/cordis' { interface Context { sfManage: ManageApi; hugegraphRead: HugeGraphReadService } }
 
 interface Backend {
+  config?: LiveManageConfig;
+  connectionReady: Promise<void>;
   auth: UiAuthorization; drafts?: DraftService; commits?: CommitService; writer?: CudWriter;
   writerError: { code: string; message: string }; reader: GatewayReader;
   lifetime: AbortController; calls: Set<Promise<unknown>>;
@@ -29,25 +31,43 @@ interface Backend {
 // An opaque owner object also works through Cordis's context-bound Service view.
 const backends = new WeakMap<object, Backend>();
 function state(owner: object): Backend { const value = backends.get(owner); ensure(value, 'UNAVAILABLE', 'Manage状态已释放'); return value; }
+function configureWriter(backend: Backend, config: ManageConfig): void {
+  backend.writer?.dispose(); backend.writer = undefined;
+  try { backend.writer = new CudWriter(new WriteTransport(connectionConfig(config), config.requestTimeoutMs)); }
+  catch (error) { backend.writerError = failure(error); }
+}
 
 /** Remote facade only; no raw writer or approval method is a model Tool. */
 export class ManageApi extends TypertRemoteService {
   static inject = ['typert', 'storageDomain', 'connection'];
   static Config = Config;
   private ownerKey = {};
-  constructor(ctx: Context, private config: ManageConfig) {
+  constructor(ctx: Context, config: LiveManageConfig) {
     super(ctx, 'sfManage');
-    backends.set(this.ownerKey, { auth: new UiAuthorization(), writerError: { code: 'CONFIG', message: '尚未加载数据库连接' }, reader: new GatewayReader(() => ctx.get('hugegraphRead')), lifetime: new AbortController(), calls: new Set() });
+    backends.set(this.ownerKey, { config, connectionReady: Promise.resolve(), auth: new UiAuthorization(), writerError: { code: 'CONFIG', message: '尚未加载数据库连接' }, reader: new GatewayReader(() => ctx.get('hugegraphRead')), lifetime: new AbortController(), calls: new Set() });
   }
   protected async *[Service.init](): AsyncGenerator<() => Promise<void>> {
     const backend = state(this.ownerKey);
     const domain = await this.ctx.storageDomain.open(domainSpec);
     backend.drafts = new DraftService(domain.table('drafts'), backend.reader); await backend.drafts.recover();
-    try { backend.writer = new CudWriter(new WriteTransport(await readConnectionEnv(this.config.envFile), this.config.requestTimeoutMs)); }
-    catch (error) { backend.writerError = failure(error); }
+    configureWriter(backend, snapshotConfig(backend.config!));
     backend.commits = new CommitService(backend.drafts, () => { ensure(backend.writer, backend.writerError.code, backend.writerError.message); return backend.writer; });
+    this.ctx.on('loader/volatile-update', () => {
+      // Revoke immediately, even if a save is still executing on the previous connection.
+      backend.auth.dispose(); backend.auth = new UiAuthorization();
+      const config = snapshotConfig(backend.config!);
+      backend.connectionReady = backend.drafts!.queue.run(async () => {
+        // The same queue covers every commit, so its captured writer is never replaced mid-save.
+        for (const [id] of backend.drafts!.store.entries()) {
+          const row = backend.drafts!.record(id);
+          if (row.plan || row.approval) { delete row.plan; delete row.approval; await backend.drafts!.save(row); }
+        }
+        configureWriter(backend, config);
+      });
+      void backend.connectionReady.catch(() => {}); // Remote callers receive the sanitized failure.
+    });
     const stopAssistant = this.ctx.inject(['agents', 'tools', 'systemPrompt', 'agentPresets', 'workingDirectory'], scope => {
-      const runtime = new AssistantRuntime(scope, backend.drafts!, [connectionEnvPath(this.config.envFile)]); backend.assistant = runtime;
+      const runtime = new AssistantRuntime(scope, backend.drafts!); backend.assistant = runtime;
       scope.effect(() => async () => { backend.assistant = undefined; await runtime.dispose(); });
     });
     const connection = this.ctx.connection;
@@ -56,16 +76,18 @@ export class ManageApi extends TypertRemoteService {
       backend.auth.dispose(); backend.lifetime.abort(); await remove();
       await stopAssistant.dispose();
       await backend.commits?.dispose(); await Promise.allSettled([...backend.calls]); await backend.drafts?.dispose(); backend.writer?.dispose(); await domain.close();
-      backend.drafts = undefined; backend.commits = undefined; backend.writer = undefined;
+      backend.drafts = undefined; backend.commits = undefined; backend.writer = undefined; backend.config = undefined;
     };
   }
   private async run<I, O>(token: string, request: I, schema: ZodType<I>, fn: (input: I, uiHash: string, signal: AbortSignal) => O | Promise<O>, signal?: AbortSignal): Promise<ManageResult<O>> {
     try {
-      const backend = state(this.ownerKey), hash = backend.auth.check(this.ctx.invocation, token); ensure(backend.drafts && backend.commits, 'UNAVAILABLE', 'Manage尚未就绪');
-      const original = this.ctx.invocation?.request.args.request ?? request;
+      const backend = state(this.ownerKey), invocation = this.ctx.invocation;
+      await backend.connectionReady;
+      const hash = backend.auth.check(invocation, token); ensure(backend.drafts && backend.commits, 'UNAVAILABLE', 'Manage尚未就绪');
+      const original = invocation?.request.args.request ?? request;
       ensure(Buffer.byteLength(JSON.stringify(original) ?? '') <= 256 * 1024, 'LIMIT', '请求过大');
       const input = schema.parse(original), combined = AbortSignal.any([backend.lifetime.signal, ...(signal ? [signal] : [])]); combined.throwIfAborted();
-      const call = Promise.resolve().then(() => fn(input, hash, combined)); backend.calls.add(call);
+      const call = Promise.resolve().then(() => { backend.auth.check(invocation, token); return fn(input, hash, combined); }); backend.calls.add(call);
       try { return { ok: true, data: await call }; } finally { backend.calls.delete(call); }
     } catch (error) {
       if (error instanceof ZodError) return { ok: false, error: { code: 'INVALID_INPUT', message: '请求字段、类型或取值不符合接口', field: error.issues[0]?.path.join('.') } };

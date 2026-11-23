@@ -16,12 +16,10 @@ const metadata = JSON.parse(result.stdout)[0], entries = readTgz(await readFile(
 if (JSON.stringify([...files].sort()) !== JSON.stringify(metadata.files.map(entry => entry.path).sort())) throw new Error('Tar entries differ from npm file list');
 for (const path of files) {
   if (/(^|\/)(node_modules|src|tests?|artifacts)(\/|$)|\.tsbuildinfo$|\.private\.|(^|\/)credentials\.json$/.test(path)) throw new Error('Forbidden package content');
-  if (/(^|\/)\.env(?:\..*)?$/.test(path) && path !== '.env.example') throw new Error('Private environment file included');
+  if (/(^|\/)\.env(?:\..*)?$/.test(path) || /^lib\/env\./.test(path)) throw new Error('Retired environment file included');
 }
-const required = ['package.json', 'README.md', 'docs/api.md', 'lib/index.js', 'lib/client.js', 'lib/types.d.ts', 'lib/contracts/manage.d.ts', 'lib/contracts/gateway.d.ts', 'lib/typert.host.js', 'lib/typert.remote-client.js', 'cordis.patch.yml', '.env.example', 'icon.svg', 'locale/zh.json', 'locale/en.json', 'scripts/check-connection.mjs'];
+const required = ['package.json', 'README.md', 'docs/api.md', 'lib/index.js', 'lib/client.js', 'lib/types.d.ts', 'lib/contracts/manage.d.ts', 'lib/contracts/gateway.d.ts', 'lib/typert.host.js', 'lib/typert.remote-client.js', 'cordis.patch.yml', 'icon.svg', 'locale/zh.json', 'locale/en.json'];
 for (const path of [...required, 'lib/preset.js', 'THIRD_PARTY_NOTICES.md']) if (!files.includes(path)) throw new Error('Package file missing: ' + path);
-const example = entries.find(entry => entry.name === '.env.example').data.toString('utf8');
-for (const key of ['HUGEGRAPH_USERNAME', 'HUGEGRAPH_PASSWORD']) if (!new RegExp('^' + key + '=$', 'm').test(example)) throw new Error('Credential example must be blank');
 const manifestEntry = entries.find(entry => entry.name === 'package.json'), manifest = JSON.parse(manifestEntry.data.toString('utf8'));
 if (manifest.scripts?.preinstall || manifest.scripts?.install || manifest.scripts?.postinstall) throw new Error('Unexpected install script');
 delete manifest.scripts; delete manifest.devDependencies; delete manifest.workspaces;
@@ -29,6 +27,7 @@ manifestEntry.data = Buffer.from(JSON.stringify(manifest, null, 2) + '\n');
 const prefix = 'software-factory-manage', releaseDir = join(artifacts, 'release', prefix);
 // Remove only obsolete bundled helpers; preserve the user's local .env and all other files.
 for (const name of ['check-env-acl.ps1', 'protect-env.ps1']) await rm(join(releaseDir, 'scripts', name), { force: true });
+for (const name of ['.env.example', 'scripts/check-connection.mjs', 'lib/env.js', 'lib/env.d.ts']) await rm(join(releaseDir, name), { force: true });
 for (const entry of entries) { const path = join(releaseDir, entry.name); await mkdir(dirname(path), { recursive: true }); await writeFile(path, entry.data); }
 const zipName = prefix + '-' + manifest.version + '.zip', zip = createZip(entries.map(entry => ({ ...entry, name: prefix + '/' + entry.name })));
 await writeFile(join(artifacts, zipName), zip);

@@ -2,7 +2,9 @@
     - id: sf-manage
       name: '@software-factory/manage'
       config:
-        envFile: '.env'
+        baseUrl: 'http://127.0.0.1:18080'
+        graphSpace: DEFAULT
+        graph: hugegraph
     - id: preset-software-factory-manage
       name: '@deepseek-ai/dsh-agent-preset'
       config:

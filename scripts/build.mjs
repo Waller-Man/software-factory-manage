@@ -1,9 +1,10 @@
-import { mkdir, cp, copyFile, writeFile, readFile, readdir } from 'node:fs/promises';
+import { mkdir, cp, copyFile, writeFile, readFile, readdir, rm } from 'node:fs/promises';
 import { dirname, join, relative } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { manage, root, host, hostRequire, prepare } from './dev.mjs';
 await prepare();
+for (const file of ['env.js', 'env.d.ts']) await rm(join(manage, 'lib', file), { force: true });
 const compile = spawnSync(process.execPath, [hostRequire.resolve('typescript/bin/tsc'), '-b', 'packages/contracts', 'packages/manage', '--pretty', 'false'], { cwd: root, stdio: 'inherit', windowsHide: true });
 if (compile.status !== 0) process.exit(compile.status ?? 1);
 const stage = join(manage, 'artifacts/analysis');
@@ -41,6 +42,6 @@ const { build } = await import(pathToFileURL(hostRequire.resolve('tsdown'))), ts
 const decorators = { name: 'manage-standard-decorators', transform(code, id) { if (!id.endsWith('.ts') || !/^\s*@/m.test(code)) return; return { code: ts.transpileModule(code, { fileName: id, compilerOptions: { target: ts.ScriptTarget.ES2024, module: ts.ModuleKind.ESNext } }).outputText, map: null }; } };
 for (const entry of ['typert.host', 'typert.remote-client']) await build({ config: false, entry: { [entry]: join(stage, entry + '.js') }, outDir: join(manage, 'lib'), platform: 'neutral', format: 'esm', clean: false, dts: false, deps: { onlyBundle: ['zod'] }, outputOptions: { entryFileNames: entry + '.js' } });
 await build({ config: false, entry: { index: join(manage, 'src/index.ts') }, outDir: join(manage, 'lib'), platform: 'node', format: 'esm', clean: false, dts: false, deps: { neverBundle: [/^@deepseek-ai\//] }, plugins: [decorators], outputOptions: { entryFileNames: 'index.js' } });
-await build({ config: false, entry: { client: join(manage, 'src/client.ts') }, outDir: join(manage, 'lib'), platform: 'browser', format: 'cjs', clean: false, dts: false, outputOptions: { entryFileNames: 'client.js', banner: 'window.__ModuleLoader__.load({id:"@software-factory/manage",factory:(require)=>{', intro: 'var module={exports:{}};var exports=module.exports;', footer: 'return module.exports;}});' } });
+await build({ config: false, entry: { client: join(manage, 'src/client.ts') }, outDir: join(manage, 'lib'), platform: 'browser', format: 'cjs', clean: false, dts: false, deps: { neverBundle: ['react', /^@deepseek-ai\//] }, outputOptions: { entryFileNames: 'client.js', banner: 'window.__ModuleLoader__.load({id:"@software-factory/manage",factory:(require)=>{', intro: 'var module={exports:{}};var exports=module.exports;', footer: 'return module.exports;}});' } });
 console.log('Built Manage Host, strict Remote descriptors, Client bridge and standalone types.');
 await build({ config: false, entry: { preset: join(manage, 'src/assistant/preset.ts') }, outDir: join(manage, 'lib'), platform: 'node', format: 'esm', clean: false, dts: false, deps: { neverBundle: [/^@deepseek-ai\//] }, outputOptions: { entryFileNames: 'preset.js' } });

@@ -22,7 +22,8 @@ const prompt = `你是软件工厂管理助手。每次操作前调用 sf_manage
 Capability下可建Capability或Agent，Agent下只建AgentVersion，版本无孩子。根不可改删。删除仅叶节点，多父节点必须让用户在界面确认。
 先根据图和草稿确定准确父节点，重名或意图不清时询问。逻辑Agent的agent_id及数据库vertexId保持不变。已有逻辑Agent可在其专属修改流程改name和description，版本向导不能顺带改逻辑Agent共享字段；若用户要改，请提示先从概览打开逻辑Agent修改入口。
 已有版本的version（如v2.0）可修改，不能清空，同一逻辑Agent下不可重号；不重算vertexId、不复制节点。Agent.description是逻辑Agent总体能力，AgentVersion.description是可选的版本具体能力描述。按节点类型区分同名属性，不继承、不复制、不互相回写；缺省保持未填写，可用set.description填写、unset:["description"]清空版本描述，保持原值则不提交该字段。
-八类19字段：Agent有agent_id/name/description；版本有version/status/description/developer/invoke_kind/dsh_ref/performance_evidence_json/constraints_json/model_dependencies_json/selection_policy_json/object_categories_json/input_schema/output_schema/intermediate_artifacts_json/cost_json/effect_json。
+八类20字段：Agent有agent_id/name/description；版本有version/status/description/developer/invoke_kind/dsh_ref/performance_evidence_json/datasets_json/constraints_json/model_dependencies_json/selection_policy_json/object_categories_json/input_schema/output_schema/intermediate_artifacts_json/cost_json/effect_json。
+数据集datasets_json可完全省略。填写时为含name及local_path/source_url的数组，可同时记录二者；相对路径依据factoryConfig中的公共根位置，不在插件配置复制根目录。根缺省不阻止登记，仅无法解析相对位置。不读取、下载或虚构数据集，不因登记数据集而生成性能证据。FactoryConfig不属于业务树，不能通过草稿Tool修改。
 属性值为字符串，JSON序列化为TEXT；模型依赖、中间产物为对象数组，处理对象为字符串数组。输入输出允许简明业务声明对象。未知可选值省略，禁止编造入口、性能和效果证据。空白不等于清空，清空可选字段用unset。
 草稿可不完整，创建Agent后可在其draft引用下创建版本。
 create使用label/parent/properties；update使用target/set/unset，label可省略；delete仅使用target。移动同一版本用action=move-version及target/parent，只允许挂到逻辑Agent，保留ID和资料，禁止复制成空版本。已有节点用target.vertexId，本草稿新增节点用target.ref，不能混用。
@@ -150,7 +151,7 @@ export class AssistantRuntime {
             return row.draft.id;
         };
         const read: ToolDefinition = { name: READ, description: '读取本会话草稿、最新修订号、能力树和版本字段。没有凭据或批准信息。', parameters: { type: 'object', properties: {}, additionalProperties: false }, output,
-            execute: async (_args, exec) => { const id = check(exec); const graph = await this.drafts.reader.load([], exec.signal); return { draft: this.drafts.load(id), graph }; } };
+            execute: async (_args, exec) => { const id = check(exec); const graph = await this.drafts.reader.load([], exec.signal); const factoryConfig = await this.drafts.reader.factoryConfig(exec.signal).catch(() => undefined); return { draft: this.drafts.load(id), graph, factoryConfig }; } };
         const edit: ToolDefinition = { name: EDIT, description: '修改本会话草稿；create用label/parent/properties，update用target/set/unset（可选label核对类型），move-version用target/parent更换版本的逻辑Agent归属，delete用target。属性值为字符串。没有批准或写库能力。', parameters: editParameters, output,
             execute: async (args, exec) => { try {
                 const draftId = check(exec), input = editSchema.parse(args);

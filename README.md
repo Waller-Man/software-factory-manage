@@ -2,7 +2,7 @@
 
 运行在 DeepSeek Harness（DSH）中的软件工厂管理后端，提供能力分类、逻辑 Agent 与具体版本的新增、修改、删除草稿，以及人工确认后的 HugeGraph 写入。
 
-**普通用户请下载 Releases 中的预编译安装包，按下面的新电脑快速启动步骤安装。源码下载 ZIP 不等于插件安装包。** Manage 依附 DSH 运行，没有独立网站、独立启动命令或自己的聊天系统；管理页面由配套 WebUI 提供。
+**普通用户请下载 Releases 中的预编译安装包，按下面的新电脑快速启动步骤安装。源码下载 ZIP 不等于插件安装包。** Manage 依附 DSH 运行，没有独立网站、独立启动命令或自己的聊天系统；业务管理页面由配套 WebUI 提供，数据库连接在本插件的组件配置页填写。
 
 ## 功能
 
@@ -11,7 +11,7 @@
 - **草稿与恢复**：改动先进入草稿，可继续编辑、恢复、撤销变更或删除草稿；不会因为填写表单或关闭页面自动入库。
 - **人工预览与保存**：保存前核对变更内容及影响范围，用户明确确认后才写数据库；保留提交回执，重复提交不重复执行已记录的写入。
 - **原生 AI 辅助**：复用 DSH 会话、模型选择和附件能力，帮助读取资料、整理字段和修改草稿；没有可用模型时仍可手工编辑。
-- **八类注册字段**：当前 FieldGroup 基线为 19 项；逻辑能力描述与版本能力描述独立，版本描述缺省时显示“未填写”，不拿逻辑描述代替。
+- **八类注册字段**：当前 FieldGroup 基线为 20 项；逻辑能力描述与版本能力描述独立，版本描述缺省时显示“未填写”，不拿逻辑描述代替。
 
 Manage 负责草稿、审批和写入；WebUI 负责展示和用户操作；Gateway 负责只读查询。Manage 不执行已登记的业务算法，也不会在启用时创建、迁移或重建数据库 Schema。
 
@@ -37,7 +37,7 @@ Manage 负责草稿、审批和写入；WebUI 负责展示和用户操作；Gate
 
 | 使用场景 | 需要准备的服务 |
 | --- | --- |
-| 读取能力树、节点和字段元数据 | 已准备好的 HugeGraph 软件工厂图，以及 Gateway 只读插件，包版本声明为 `^0.1.1` |
+| 读取能力树、节点和字段元数据 | 已准备好的 HugeGraph 软件工厂图，以及 Gateway 只读插件，包版本声明为 `^0.1.2` |
 | 管理草稿与人工保存 | Manage，以及 DSH 原生 Connection、API Gateway、Typert、Storage Domain 和持久存储后端 |
 | 使用概览、入库和修改页面 | 配套 WebUI；只安装 Manage 不会出现完整管理页面 |
 | 使用 AI 草稿助手 | DSH 原生 Agents、Tools、SystemPrompt、AgentPresets、WorkingDirectory 及可用的 provider/model |
@@ -61,51 +61,37 @@ Manage 将 Gateway 声明为 peerDependency，应先安装并启用 Gateway。�
 
 ### 2. 下载并解压 Manage
 
-从项目的 **Releases／发布** 获取 `software-factory-manage-0.1.0.zip`，解压到一个长期保留的目录，例如：
+从项目的 **Releases／发布** 获取 `software-factory-manage-0.1.2.zip`，解压到一个长期保留的目录，例如：
 
 ```text
 D:\DSH-Plugins\software-factory-manage\
 ├── package.json
 ├── cordis.patch.yml
 ├── README.md
-├── .env.example
 ├── icon.svg
 ├── lib\
 ├── locale\
-├── docs\api.md
-└── scripts\check-connection.mjs
+└── docs\api.md
 ```
 
 以**包含 `package.json` 的目录**为准；解压后如果多了一层文件夹，继续进入内层。普通用户不需要安装源码依赖、执行构建或启动额外后端进程；DSH 安装器仍可能解析包依赖，因此不承诺完全离线安装。
 
 尚未发布 Release 时，请联系维护者获取预编译 ZIP 或完整运行目录。同版 `.tgz` 是 npm 格式分发包，供支持该格式的安装器或开发者使用。
 
-### 3. 配置数据库连接
+### 3. 在组件内部配置连接
 
-在上述 **Manage 安装目录**中，将 `.env.example` 复制为 `.env`，与 `package.json` 放在同一层。首次配置可执行：
+安装后进入 **插件 → 插件包 → 包含的组件 → 软件工厂管理后端 → 配置**，填写并保存：
 
-```powershell
-Set-Location 'D:/DSH-Plugins/software-factory-manage'
-Copy-Item -LiteralPath '.env.example' -Destination '.env'
-notepad .env
-```
+| 字段 | 说明 |
+| --- | --- |
+| `baseUrl` | 数据库地址及端口，默认 `http://127.0.0.1:18080`；远程使用 HTTPS |
+| `graphSpace` / `graph` | 默认 `DEFAULT` / `hugegraph`，与 Gateway 指向同一张图 |
+| `username` / `password` | 数据库用户名和密码；密码使用 DSH 秘密字段，保存后不回显 |
+| `requestTimeoutMs` | 单次请求超时，默认 10000 毫秒 |
 
-填写这五项，连接格式与 Gateway 一致：
+**不需要 `.env`，直接填写组件表单即可。** 0.1.2 修复了组件页“配置尚未就绪”的问题；旧文件不自动导入或删除。保存配置后，正在执行的保存仍使用原连接，后续操作使用新配置；旧界面授权和审批失效，请回到业务页面重新连接并预览。密码留空保留已保存值；秘密字段脱敏不代表加密存储。
 
-```dotenv
-HUGEGRAPH_BASE_URL=http://127.0.0.1:18080
-HUGEGRAPH_GRAPHSPACE=DEFAULT
-HUGEGRAPH_GRAPH=hugegraph
-HUGEGRAPH_USERNAME=
-HUGEGRAPH_PASSWORD=
-```
-
-- 地址、图空间、图和凭据应与 Gateway 指向同一张现有图；用户名、密码只在本地填写，不上传到源码仓库或 Releases。
-- 也可在 DSH 的 Manage 插件配置中，将 `envFile` 指向已有 Gateway `.env` 的绝对路径，避免维护两份配置。
-- 相对路径按 **Manage 插件目录**解析，不按 DSH 启动目录解析；不会自动搜索源码目录或用系统环境变量覆盖连接。
-- 如果实际安装的是解压包，把 `.env` 放在源码 `packages/manage` 中不会生效。升级时保留原 `.env`，不要用空模板覆盖。
-
-插件不再强制检查配置文件的 ACL 或 Unix 权限位，但 DSH 进程需要能读取文件；仍检查普通文件、大小、UTF-8 和配置格式。
+数据集根位置不在此表单：统一从数据库 `FactoryConfig / config:software-factory / dataset_root` 读取。本地绝对路径或 HTTP/HTTPS 根地址由数据库管理员维护。
 
 ### 4. 在 DSH 网页安装
 
@@ -116,23 +102,11 @@ HUGEGRAPH_PASSWORD=
 
 Manage 复用 DSH 的网页、认证和进程，不额外监听 HTTP 端口。目录安装后请保留该目录，不要删除、移动或改名。
 
-也可使用包含 Gateway、Manage、WebUI 的软件工厂组合 Bundle。**独立安装与组合安装选择一种，不要重复启用相同插件。** 组合安装时按各后端实际配置的 `envFile` 放置连接文件，不能照搬独立 ZIP 的内部目录假设。
+也可使用包含 Gateway、Manage、WebUI 的软件工厂组合 Bundle。**独立安装与组合安装选择一种，不要重复启用相同插件。** 组合安装时也进入对应组件填写连接，Bundle 外层不提供重复表单。
 
 ### 5. 检查连接
 
-在 Manage 安装目录执行：
-
-```powershell
-node scripts/check-connection.mjs
-```
-
-若使用外部配置文件，传入该文件的绝对路径：
-
-```powershell
-node scripts/check-connection.mjs 'D:/DSH-Plugins/software-factory-gateway/.env'
-```
-
-成功结果包含 `ok: true`、`schema: "compatible"` 和 `databaseWrites: 0`。此命令仅读取 Schema，不执行新增、修改或删除；它不替代 Gateway 健康检查，也不代表真实写库已经验证。
+确认 Gateway 的健康检查通过，再打开软件工厂页面。若 Manage 未就绪，检查上述组件连接和 DSH 持久存储服务。开发者可通过认证 Remote `sfManage.status` 查看 `gatewayReady`、`writerReady` 和 `readyToCommit`，此查询只读，不执行 CUD。
 
 ### 6. 验证可用
 
@@ -142,6 +116,12 @@ node scripts/check-connection.mjs 'D:/DSH-Plugins/software-factory-gateway/.env'
 - **人工保存**：先查看变更预览，需要正式入库时再明确确认。仅为验证安装，无须写入测试节点或运行耗时算法。
 
 **插件已启用不等于数据库、模型或真实业务算法都已验证。** 如页面仍是旧版，重启 DSH 并按 `Ctrl+F5` 刷新。
+
+## 数据集登记
+
+第 3 步训练与评估支持增删数据集条目：填写名称、相对路径或来源网址，也可同时记录二者。可以完全留空提交，已有数据支持保持、修改和清空。相对路径依据数据库公共根位置展示解析结果；根缺省或读取失败不阻止登记。概览及变更预览按条目展示，不要求用户填写 JSON。
+
+提交只登记版本资料，不检查文件必须存在，不创建目录、读取文件或下载数据；也不自动维护公共配置节点。
 
 ## AI 权限与数据保护
 
@@ -160,7 +140,7 @@ AI 不获得批准 Tool、通用文件写入或 Shell Tool。人工批准绑定�
 
 ## 更新与停用
 
-- **更新**：按发布说明替换安装文件，保留本地 `.env`，重启 DSH，再按 `Ctrl+F5` 刷新网页；需要时同步更新 WebUI、Gateway。
+- **更新**：按发布说明替换安装文件，在组件表单填写连接，重启 DSH，再按 `Ctrl+F5` 刷新网页；需要时同步更新 WebUI、Gateway。
 - **停用／启用**：在 DSH“插件”页操作。停用不会删除数据库、草稿或历史回执；如果保存被中断，重新启用后按原回执核对，不默认重放写入。
 - **草稿位置**：草稿、会话绑定和提交回执保存在 DSH Storage Domain 的 `software_factory_manage` 域，不在插件代码目录或 `.env` 中。
 - **更换电脑**：另外备份和迁移数据库、DSH 持久数据及工作区；安装包只包含插件程序，不包含用户草稿、会话、模型配置和数据库内容。
@@ -169,7 +149,7 @@ Manage 本身不产生算法运行成果；业务产物由 Runtime 或对应业�
 
 ## 遇到问题
 
-- **配置或依赖报错**：检查安装目录中的 `.env`、Gateway 和 DSH 原生服务。
+- **配置或依赖报错**：检查组件连接配置、Gateway 和 DSH 原生服务。
 - **页面或 AI 不可用**：检查 WebUI 和模型配置；更新后重启 DSH 并按 `Ctrl+F5` 刷新。
 - **保存超时**：保留草稿与原回执，先核对结果，不要重复入库。
 

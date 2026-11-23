@@ -53,7 +53,7 @@ export class NativeReaders {
         const directories = scope.get('workingDirectory');
         ensure(directories, 'DEPENDENCY_UNAVAILABLE', 'DSH工作区未就绪');
         const target = await fs.resolve(path, { cwd: await directories.ensure(exec.agent, exec.signal), signal: exec.signal });
-        const sensitive = /(^|[\\/])(?:\.env(?:\.[^\\/]*)?|\.?credentials(?:\.[^\\/]*)?|\.ssh|\.aws)([\\/]|$)/i;
+        const sensitive = /(^|[\\/])(?:\.env(?:\.[^\\/]*)?|\.?credentials(?:\.[^\\/]*)?|cordis(?:\.patch)?\.ya?ml|\.ssh|\.aws)([\\/]|$)/i;
         ensure(![path, target.displayPath, fs.processPath(target)].some(path => sensitive.test(path)), 'UNAUTHORIZED', '管理助手不能读取凭据配置文件');
         for (const file of this.protectedFiles) {
             const protectedTarget = await fs.resolve(file, { signal: exec.signal }).catch(() => undefined);

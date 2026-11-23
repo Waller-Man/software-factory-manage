@@ -7,10 +7,9 @@
 *.tsbuildinfo
 *.log
 
-# Local connection settings; only the blank template belongs in Git
+# Local credentials never belong in Git or release assets
 .env
 .env.*
-!.env.example
 credentials.json
 connection.private.json
 *.private.*

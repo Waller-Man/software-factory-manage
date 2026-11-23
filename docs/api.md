@@ -1,10 +1,20 @@
 # Manage API 1.0
 
-实现包：`@software-factory/manage` 0.1.0。目标DSH：0.2.1-alpha.2。本文是接口规范源，打包时复制到插件的 `docs/api.md`。类型唯一来源为 `packages/contracts/src/manage.ts`，发布包通过 `@software-factory/manage/types` 和生成的 `/remote` 提供前端声明。
+实现包：`@software-factory/manage` 0.1.2。目标DSH：0.2.1-alpha.2。本文是接口规范源，打包时复制到插件的 `docs/api.md`。类型唯一来源为 `packages/contracts/src/manage.ts`，发布包通过 `@software-factory/manage/types` 和生成的 `/remote` 提供前端声明。
+
+## 组件配置与数据集
+
+0.1.2 使用 DSH 原生组件配置：插件 → 插件包 → 包含的组件 → 软件工厂管理后端。baseUrl、graphSpace、graph、username、password及requestTimeoutMs保存在宿主配置；不读取.env或系统环境。password标为secret，配置对象不挂到公开sfManage服务上。连接字段声明volatile，原生Settings据此生成组件命名空间；后端读取.get()快照。在所属组件loader/volatile-update事件中立即撤销旧界面授权，将清除旧预览/审批及更新写连接排入草稿和提交共用的串行队列，已接受的保存全部步骤继续使用原连接，新操作等待配置处理完成；旧计划需重新预览。Client通过plugins.row.config注册@software-factory/manage#sf-manage组件页，不注册Bundle外层表单；从宿主传入的form.state读取脱敏配置，以form.mutate(ops,expectedRevision)保存明确修改的字段。密码输入始终为空，留空不发送password操作。无根目录字段，不修改宿主认证或数据库Schema。
+
+依赖Read 0.1.2+，原API 1.0及16个Remote不变。公共数据集根位置只通过Gateway的read({kind:'factory_config'})读取，返回configured/missing/invalid；查询失败单独展示，不阻止普通图浏览或数据集缺省提交。FactoryConfig不属于NodeKind，不进入能力树或普通草稿CUD；本轮不提供修改公共配置入口。
+
+AgentVersion.datasets_json是可选TEXT，JSON数组，每项为{name,local_path?,source_url?}；name与至少一个位置在提交时必填，两个位置可同时保留。set.datasets_json填写序列化数组，保持原值不提交该键，unset:['datasets_json']清空。没有数据集时省略属性，不填写空字符串；合法空数组可读取。草稿允许不完整，提交预览才校验条目。相对路径不得为绝对路径或越界，来源网址仅HTTP/HTTPS且不含凭据或签名。根未配置、文件不存在均不作为版本提交的硬门槛；不创建目录、下载或读取数据集文件。未知额外条目属性保留，不自动解释成执行参数。
+
+AI read_draft额外返回Gateway公共配置结果（不可用时省略），edit_draft继续只改版本草稿；名称及路径无真实依据时不编造，不因登记数据集生成性能证据。WebUI第3步采用条目编辑器，复用现有修订冲突、预览及人工保存。
 
 ## 1. 调用入口与权限
 
-- 原生Client命名空间：`ctx.remote.sfManage`，共16个方法。本插件自带无页面Client桥，消费者不重复mount。
+- 原生Client命名空间：`ctx.remote.sfManage`，共16个方法。本插件Client挂载API桥并注册组件连接配置页，业务消费者不重复mount。
 - 签名统一为 `method(token, request, signal?)`。token是短期界面授权，request是下文的JSON对象；signal交给宿主取消机制，不放入JSON。
 - 每个方法均返回 `RemoteResult<ManageResult<T>>`，须检查传输与业务两层ok。
 - 只读图查询使用Gateway；Manage不增加概览读取接口。
@@ -295,7 +305,7 @@ developer是版本级TEXT，多人用顿号分隔；模型、类别、优选指�
 
 服务端根据草稿持久绑定产生独立Session ID；sourceSessionId仅用来读取宿主实际来源Agent的模型选择与WorkingDirectory，不是授权依据。不接受前端传入路径或模型凭据。没有来源会话、来源已关闭或未加载时，采用DSH WorkingDirectory.defaultDirectory和默认模型，不要求先打开来源；新会话固定这些初始值，恢复不覆盖已在原生选择器切换的模型。
 
-会话由 `agents.create/resume` 和 `agentPresets.mount/select` 接入。`software-factory-manage` 安全预设负责冷恢复。Tools限制通过真实exec.agent对象身份、agents.get注册对象、Tool定义同一性及草稿持久归属共同执行；不是检查调用者自填agentId。继承工具仅放行现有Gateway的hugegraph_read；官方read/read_image定义通过正常ToolRuntime局部注册，不导出官方工具套件的write/edit。guard同步拒绝其他入口，pre-execute只做额外拒绝或next，不强制allow、不绕开宿主策略。文件读取使用宿主文件系统，拒绝凭据名称、目录及Manage实际envFile路径；原生附件上传由DSH拥有，不另造上传Remote。
+会话由 `agents.create/resume` 和 `agentPresets.mount/select` 接入。`software-factory-manage` 安全预设负责冷恢复。Tools限制通过真实exec.agent对象身份、agents.get注册对象、Tool定义同一性及草稿持久归属共同执行；不是检查调用者自填agentId。继承工具仅放行现有Gateway的hugegraph_read；官方read/read_image定义通过正常ToolRuntime局部注册，不导出官方工具套件的write/edit。guard同步拒绝其他入口，pre-execute只做额外拒绝或next，不强制allow、不绕开宿主策略。文件读取使用宿主文件系统，拒绝凭据名称、目录及DSH的cordis配置文件；原生附件上传由DSH拥有，不另造上传Remote。
 
 | Tool | 参数 | 返回与权限 |
 | --- | --- | --- |
@@ -317,4 +327,4 @@ AI草稿Tool的JSON Schema与执行参数解析共用 `assistant/edit-contract.t
 
 ManageDraft新增可选 `lastCommitRequestId`，仅供刷新后读取既有回执，不包含批准能力。草稿列表的attention/committing状态可通过getDraft读取此指针，再getReceipt/reconcile。nonce永不持久到浏览器。
 
-版本能力描述：AgentVersion.description为独立可选TEXT；Agent.description为逻辑总体能力。创建版本可省略description；更新保持原值时不提交该键，填写使用set.description，清空使用unset:["description"]。不得复制或回写逻辑描述。所有操作仍先写草稿，最终人工保存。当前FieldGroup基线为八类19项。
+版本能力描述：AgentVersion.description为独立可选TEXT；Agent.description为逻辑总体能力。创建版本可省略description；更新保持原值时不提交该键，填写使用set.description，清空使用unset:["description"]。不得复制或回写逻辑描述。所有操作仍先写草稿，最终人工保存。当前FieldGroup基线为八类20项。

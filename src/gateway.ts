@@ -19,6 +19,11 @@ export class GatewayReader {
   constructor(private readonly provider: () => HugeGraphReadService | undefined) {}
   private service(): HugeGraphReadService { const service = this.provider(); ensure(service?.apiVersion === '1.0', 'DEPENDENCY_UNAVAILABLE', '需要启用Gateway read API 1.0'); return service; }
   async ready(signal: AbortSignal): Promise<boolean> { const result = await this.service().health(signal); return result.ok && result.data.ready; }
+  async factoryConfig(signal: AbortSignal) {
+    const data = unwrap(await this.service().read({ kind: 'factory_config' }, signal));
+    ensure('kind' in data && data.kind === 'factory_config', 'GATEWAY_CONTRACT', '请升级到Gateway 0.1.2的公共配置查询');
+    return data;
+  }
   async node(id: string, signal: AbortSignal): Promise<NodeData> {
     let offset = 0, expectedFingerprint: string | undefined, first: NodeData | undefined;
     do {

@@ -31,8 +31,9 @@ test('native read and graph tools work with drafts; foreign contexts, writes, cr
   try {
     await ctx.plugin(SystemPrompt); await ctx.plugin(Tools);
     await ctx.plugin(FsLocal);
-    const workspace = await mkdtemp(resolve('packages/manage/artifacts/assistant-files-'));
-    t.after(async () => { assert.equal(dirname(workspace), resolve('packages/manage/artifacts')); await rm(workspace, { recursive: true, force: true }); });
+    const artifactRoot = resolve(import.meta.dirname, '../artifacts');
+    const workspace = await mkdtemp(resolve(artifactRoot, 'assistant-files-'));
+    t.after(async () => { assert.equal(dirname(workspace), artifactRoot); await rm(workspace, { recursive: true, force: true }); });
     await ctx.plugin(AttachmentLocal, { dshHome: join(workspace, 'host-attachments') });
     await writeFile(join(workspace, 'README.md'), '合成上传资料：Agent登记说明');
     await writeFile(join(workspace, '.env'), 'synthetic-credential-never-return');
@@ -125,6 +126,8 @@ test('native read and graph tools work with drafts; foreign contexts, writes, cr
     assert.equal(logical.ok, true, JSON.stringify(logical)); assert.equal(logical.data.revision, 8);
     const stable = await editValue({ action: 'update', expectedRevision: 8, target: { vertexId: 'synthetic-agent' }, set: { agent_id: 'other' } });
     assert.equal(stable.error.code, 'STABLE_ID'); assert.equal(f.db.writes, 0);
+    const datasets = await editValue({ action: 'update', expectedRevision: 8, target: { vertexId: versionId }, set: { datasets_json: '[{"name":"合成数据声明","local_path":"synthetic/sample.zip"}]' } });
+    assert.equal(datasets.ok, true, JSON.stringify(datasets)); assert.equal(datasets.data.revision, 9); assert.equal(f.db.writes, 0);
     await runtime.dispose(); assert.equal((await call(READ, {})).isError, true); assert.equal(f.db.writes, 0);
   } finally { await runtime?.dispose(); await ctx.fiber.dispose(); f.core.dispose(); }
 });

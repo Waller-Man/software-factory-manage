@@ -5,11 +5,30 @@ export function validateProperties(label: NodeKind, values: Record<string, strin
   for (const [key, value] of Object.entries(values)) {
     ensure(fields[label].includes(key), 'VALIDATION_FAILED', '不支持的字段', key);
     ensure(typeof value === 'string' && value.length <= 131072 && !value.includes('\0'), 'VALIDATION_FAILED', '字段必须是有界文本', key);
+    if (complete && key === 'datasets_json') ensure(!!value.trim(), 'VALIDATION_FAILED', '没有数据集时请保持省略或清空属性，不填写空字符串', key);
     if (!complete || !value.trim()) continue;
     if (key.endsWith('_json') || key.endsWith('_schema')) {
       let parsed: unknown; try { parsed = JSON.parse(value); } catch { ensure(false, 'VALIDATION_FAILED', '字段不是有效JSON；可先保存草稿再修正', key); }
       const object = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
-      if (key === 'model_dependencies_json') ensure(Array.isArray(parsed) && parsed.every(v => object(v) && typeof v.name === 'string' && !!v.name.trim() && (v.vendor === undefined || typeof v.vendor === 'string')), 'VALIDATION_FAILED', '模型依赖需为含name、可选vendor的对象数组', key);
+      if (key === 'datasets_json') {
+        ensure(Array.isArray(parsed), 'VALIDATION_FAILED', '数据集需为条目数组', key);
+        for (const entry of parsed) {
+          ensure(object(entry) && typeof entry.name === 'string' && !!entry.name.trim(), 'VALIDATION_FAILED', '每项数据集需填写名称', key);
+          ensure((typeof entry.local_path === 'string' && !!entry.local_path.trim()) || (typeof entry.source_url === 'string' && !!entry.source_url.trim()), 'VALIDATION_FAILED', '每项数据集需填写相对路径或来源网址', key);
+          if (entry.local_path !== undefined) {
+            ensure(typeof entry.local_path === 'string' && entry.local_path.length <= 4096 && !!entry.local_path.trim(), 'VALIDATION_FAILED', '数据集路径需为相对路径', key);
+            let path = entry.local_path.replaceAll('\\', '/');
+            try { path = decodeURIComponent(path); } catch { ensure(false, 'VALIDATION_FAILED', '数据集相对路径编码无效', key); }
+            ensure(!/^[\/]|[:?#\u0000-\u001f\u007f]/.test(path) && !path.split('/').some(part => part === '..') && !path.includes('\\'), 'VALIDATION_FAILED', '数据集路径不能为绝对路径或越出公共根位置', key);
+          }
+          if (entry.source_url !== undefined) {
+            ensure(typeof entry.source_url === 'string' && entry.source_url.length <= 4096 && !/[\u0000-\u001f\u007f]/.test(entry.source_url), 'VALIDATION_FAILED', '数据集来源网址无效', key);
+            let url: URL; try { url = new URL(entry.source_url); } catch { ensure(false, 'VALIDATION_FAILED', '数据集来源网址无效', key); }
+            ensure(['http:', 'https:'].includes(url.protocol) && !!url.host && !url.username && !url.password && ![...url.searchParams.keys()].some(name => /token|signature|credential|secret|api.?key/i.test(name)), 'VALIDATION_FAILED', '来源网址必须为不含凭据或签名的HTTP/HTTPS地址', key);
+          }
+        }
+      }
+      else if (key === 'model_dependencies_json') ensure(Array.isArray(parsed) && parsed.every(v => object(v) && typeof v.name === 'string' && !!v.name.trim() && (v.vendor === undefined || typeof v.vendor === 'string')), 'VALIDATION_FAILED', '模型依赖需为含name、可选vendor的对象数组', key);
       else if (key === 'object_categories_json') ensure(Array.isArray(parsed) && parsed.every(v => typeof v === 'string' && !!v.trim()), 'VALIDATION_FAILED', '处理对象类别需为字符串数组', key);
       else if (key === 'intermediate_artifacts_json') ensure(Array.isArray(parsed) && parsed.every(object), 'VALIDATION_FAILED', '中间产物需为声明对象数组', key);
       else ensure(object(parsed), 'VALIDATION_FAILED', '此字段需为JSON对象；输入输出可使用简明声明或既有JSON Schema', key);
